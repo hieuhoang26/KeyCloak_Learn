@@ -124,12 +124,3 @@ Backend does not handle user passwords — it only validates tokens for security
 This is the data Keycloak sends to applications after login.
 
 ---
-
-## Conclusion
-
-This foundations guide helps you:
-
-- Get started with Keycloak configuration without confusion
-- Understand the role and structure of tokens
-- Distinguish between authentication and authorization
-- Prepare for integrating Keycloak with Spring Boot or microservices

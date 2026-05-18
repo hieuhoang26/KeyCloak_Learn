@@ -47,3 +47,11 @@ Docs - Administration REST API - OpenAPI definition in YAML format
    - Security
    - Database
    - Monitoring
+
+| DB RBAC          | Keycloak                                              |
+| ---------------- | ----------------------------------------------------- |
+| users            | Users                                                 |
+| roles            | Realm Roles (global) / Client Role (permission-level) |
+| permissions      | Client Roles (scope-level)                            |
+| user_roles       | User ↔ Role mapping                                   |
+| role_permissions | Role composite                                        |
