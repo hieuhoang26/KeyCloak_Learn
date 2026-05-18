@@ -18,12 +18,12 @@ The key insight: OAuth2 separates **who you are** from **what you're allowed to 
 
 ### The four roles
 
-| Role | Description | Example |
-|---|---|---|
-| **Resource Owner** | The user who owns the data | You |
-| **Client** | The app requesting access | Your Spring Boot app |
-| **Authorization Server** | Issues tokens after login | Keycloak, Google, GitHub |
-| **Resource Server** | Hosts the protected data | Your API |
+| Role                     | Description                | Example                  |
+| ------------------------ | -------------------------- | ------------------------ |
+| **Resource Owner**       | The user who owns the data | You                      |
+| **Client**               | The app requesting access  | Your Spring Boot app     |
+| **Authorization Server** | Issues tokens after login  | Keycloak, Google, GitHub |
+| **Resource Server**      | Hosts the protected data   | Your API                 |
 
 ### The Authorization Code Flow (memorize this)
 
@@ -126,12 +126,12 @@ GET https://accounts.google.com/.well-known/openid-configuration
 
 Scopes are what the client **requests** from the Authorization Server.
 
-| Scope | What it unlocks |
-|---|---|
-| `openid` | Required for OIDC. Enables ID Token. |
-| `email` | User's email address in the ID Token |
-| `profile` | Name, picture, locale |
-| `offline_access` | Refresh Token |
+| Scope            | What it unlocks                      |
+| ---------------- | ------------------------------------ |
+| `openid`         | Required for OIDC. Enables ID Token. |
+| `email`          | User's email address in the ID Token |
+| `profile`        | Name, picture, locale                |
+| `offline_access` | Refresh Token                        |
 
 In oauth2-proxy, you configure scopes via `--scope="openid email profile"`.
 
