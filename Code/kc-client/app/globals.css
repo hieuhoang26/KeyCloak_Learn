@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* ── Design token palette ── */
+:root {
+  --accent: #4338ca;
+  --accent-ink: #fff;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --ink: #0f172a;
+  --ink-2: color-mix(in srgb, var(--ink) 70%, transparent);
+  --ink-3: color-mix(in srgb, var(--ink) 50%, transparent);
+  --ink-4: color-mix(in srgb, var(--ink) 20%, transparent);
+  --surface: #fafaf9;
+  --card: #ffffff;
+  --line: color-mix(in srgb, var(--ink) 10%, transparent);
+  --err: #dc2626;
+  --ok: #16a34a;
+
+  --radius: 10px;
+  --radius-card: 20px;
+  --field-h: 46px;
+  --gap: 18px;
+
+  --background: var(--surface);
+  --foreground: var(--ink);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-inter-tight), "Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Slide transitions ── */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.slide-in-right { animation: slideInRight 320ms cubic-bezier(.2,.7,.2,1) both; }
+.slide-in-left  { animation: slideInLeft  320ms cubic-bezier(.2,.7,.2,1) both; }
+
+/* ── Spinner ── */
+@keyframes spin-ring {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin-ring .7s linear infinite;
+}
