@@ -33,14 +33,148 @@ Federation allows Keycloak to trust an external IdP (Google, GitHub, LDAP, an en
 
 ### OAuth 2.0
 
-OAuth 2.0 is an **authorization** framework — it defines how an application can obtain limited access to a user's resources without handling their password.
+OAuth 2.0 is an **authorization** framework — it defines how an application can obtain limited access to a user's resources without handling their password directly. The key idea: instead of sharing credentials with every app, the user grants a limited-scope token.
+ 
+#### Key roles
+ 
+```
+┌─────────────────┐        grants consent        ┌──────────────────┐
+│  Resource owner │ ───────────────────────────► │  Authorization   │
+│  (end user)     │                              │  server          │
+│                 │ ──── authenticates at ──────►│  (Keycloak)      │
+└─────────────────┘                              └────────┬─────────┘
+                                                          │ issues
+                                                          │ access token
+┌─────────────────┐        calls API with token  ┌────────▼─────────┐
+│  Client         │ ───────────────────────────► │  Resource server │
+│  (your app)     │                              │  (your API)      │
+└─────────────────┘                              └──────────────────┘
+```
+ 
+**Resource Owner** — The person (or system) who owns the data and can authorize access to it. In a typical web app this is the end user logged in to their account. They don't share their password with the client app — they only grant permission.
+ 
+> Example: A user who owns a Google Calendar and wants to let a scheduling app read their events.
+ 
+**Client** — A third-party application that wants to access the resource owner's data *on their behalf*. Before accessing anything, the client must obtain explicit authorization from the resource owner. The client never sees the user's password.
+ 
+> Example: The scheduling app (React frontend + Spring Boot backend) that wants to read calendar events.
+ 
+**Authorization Server** — Authenticates the resource owner, verifies consent, and issues access tokens to clients. This is **Keycloak** in our setup. It is the trust anchor — both the client and the resource server trust it.
+ 
+> Note: The authorization server and resource server can be the same system. In Keycloak's case, Keycloak is the authorization server; your own APIs are the resource servers.
+ 
+**Resource Server** — Stores and serves the protected resources. It accepts access tokens and validates them (by checking the token signature against the authorization server's public key) before returning data.
+ 
+> Example: Your Spring Boot API that serves `/api/orders` or `/api/users`.
+ 
+---
+ 
+#### Grant types (flows)
+ 
+A grant type defines *how* the client obtains an access token. OAuth 2.0 defines four standard flows; Keycloak supports all of them. Choose based on what kind of client you have.
+ 
+| Grant type | Client type | User involved? | When to use |
+|---|---|---|---|
+| Authorization Code + PKCE | SPA, mobile, web app | Yes | Default for all user-facing apps |
+| Client Credentials | Backend service, daemon | No | Machine-to-machine (M2M) |
+| Device Code | Smart TV, CLI tool | Yes (on another device) | Input-limited devices |
+| Implicit | *(deprecated)* | Yes | Do not use in new projects |
+ 
+---
+ 
+##### Authorization Code flow (with PKCE)
+ 
+The most important flow. Used by any app where a real user logs in. PKCE (Proof Key for Code Exchange) is mandatory for public clients (SPAs, mobile apps) and recommended for confidential clients too.
+ 
+```mermaid
+sequenceDiagram
+    participant U as (Resource Owner) User
+    participant C as Client App
+    participant AS as Auth Server
+    participant RS as Resource Server
 
-Key roles:
+    U->>C: ① Login
+    C->>AS: ② Redirect (client_id, scope, code_challenge)
+    AS-->>U: Login page
+    U->>AS: ③ Credentials
+    AS-->>C: ④ Authorization code
 
-- **Resource Owner** — the user
-- **Client** — your application
-- **Authorization Server** — Keycloak
-- **Resource Server** — the API being protected
+    C->>AS: ⑤ Code + code_verifier
+    AS-->>C: Access token\nID token\nRefresh token
+
+    C->>RS: ⑥ Bearer token (API request)
+    RS-->>C: Protected data
+```
+ 
+Step-by-step:
+ 
+1. User clicks "Login" in the client app.
+2. Client redirects the browser to Keycloak's `/auth` endpoint, passing `client_id`, `scope`, `redirect_uri`, and a `code_challenge` (PKCE).
+3. User logs in and grants consent on the Keycloak login page.
+4. Keycloak redirects back to the app's `redirect_uri` with a short-lived **authorization code**.
+5. The client app exchanges the code + `code_verifier` (PKCE) for tokens via a **back-channel** POST (browser never sees the secret exchange).
+6. Client app calls the resource server's API using `Authorization: Bearer <access_token>`.
+> Why the code step? The authorization code is short-lived and single-use. Even if it leaks from the browser URL, it is useless without the `code_verifier` known only to the client. This is safer than returning the token directly in the redirect.
+ 
+```bash
+# Step 5 — token exchange (curl example)
+curl -X POST http://localhost:8080/realms/demo/protocol/openid-connect/token \
+  -d "grant_type=authorization_code" \
+  -d "client_id=demo-app" \
+  -d "code=<auth_code>" \
+  -d "redirect_uri=http://localhost:3000/callback" \
+  -d "code_verifier=<verifier>"
+```
+ 
+---
+ 
+##### Client Credentials flow
+ 
+Used when there is no user involved — a backend service authenticating as itself. The client uses its own `client_id` and `client_secret` to get a token. No browser redirect, no login page.
+ 
+```mermaid
+sequenceDiagram
+    participant C as Client (Service)
+    participant AS as Auth Server
+    participant RS as Resource Servermermaid
+
+    C->>AS: ① client_id + client_secret\n grant_type=client_credentials
+    AS-->>C: ② access_token\n(no refresh token)
+
+    C->>RS: ③ Bearer token (API request)
+    RS-->>C: ④ Resource response
+```
+ 
+```bash
+curl -X POST http://localhost:8080/realms/demo/protocol/openid-connect/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=my-service" \
+  -d "client_secret=<secret>"
+```
+ 
+> Note: Client Credentials tokens have no `sub` claim for a user and no refresh token. The service simply re-authenticates when the token expires.
+ 
+---
+ 
+##### Refresh Token flow
+ 
+Not a standalone grant — used after Authorization Code flow to obtain a new access token without requiring the user to log in again.
+ 
+```bash
+curl -X POST http://localhost:8080/realms/demo/protocol/openid-connect/token \
+  -d "grant_type=refresh_token" \
+  -d "client_id=demo-app" \
+  -d "refresh_token=<refresh_token>"
+```
+ 
+The server returns a new `access_token` (and usually a new `refresh_token` — rotate and discard the old one). If the refresh token has expired or been revoked, the user must log in again.
+ 
+---
+ 
+##### Why not Implicit flow?
+ 
+The Implicit flow returned tokens directly in the browser URL fragment (no code exchange step). This was created when browsers could not make cross-origin POST requests. Modern browsers support CORS, so the Authorization Code + PKCE flow is always safer and should be used instead. Keycloak still supports Implicit for legacy clients but it is disabled by default.
+ 
 
 ### OpenID Connect (OIDC)
 
@@ -197,6 +331,32 @@ http://localhost:8080/realms/demo/protocol/openid-connect/auth
 Log in as `testuser`. You will be redirected with an authorization `code` in the URL. This confirms the authorization code flow is working.
 
 ---
+## OIDC Login Flow (Authorization Code Flow)
+
+![flow](/img/keycloak_flow.png)
+
+1. Frontend redirects user to Keycloak login page.
+2. User enters username/password (or uses IdP).
+3. Keycloak issues tokens (ID Token, Access Token, Refresh Token).
+4. Frontend receives tokens and sends the Access Token to the backend API.
+5. Backend verifies the Access Token and processes the request.
+
+Backend does not handle user passwords — it only validates tokens for security and scalability.
+
+## ![flow](/img/keycloak_flow_2.png)
+
+## Mini Exercise (Understand tokens quickly)
+
+1. Open: https://jwt.io
+2. Paste a sample JWT.
+3. Observe:
+   - `sub` = user ID
+   - `preferred_username` = username
+   - `realm_access.roles` = roles assigned to the user
+
+This is the data Keycloak sends to applications after login.
+
+--
 
 ## 6. Key Takeaways
 

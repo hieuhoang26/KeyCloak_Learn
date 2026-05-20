@@ -1,12 +1,14 @@
 server:
   port: ${SERVER_PORT:8000}
+  servlet:
+    context-path: /api/v1
 
 spring:
-  server:
-    servlet:
-      context-path: /api/v1
-
   application:
     name: keycloak
 
-
+keycloak:
+  server-url: ${KEYCLOAK_SERVER_URL:http://localhost:8080}
+  realm: ${KEYCLOAK_REALM:demo}
+  client-id: ${KEYCLOAK_CLIENT_ID:spring-client}
+  client-secret: ${KEYCLOAK_CLIENT_SECRET:change-me}
