@@ -2,7 +2,6 @@ package com.ex.keycloak.service.imp;
 
 import com.ex.keycloak.config.KeycloakProperties;
 import com.ex.keycloak.dto.UserDTO;
-import com.ex.keycloak.dto.UserResponse;
 import com.ex.keycloak.service.IdentityProvider;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -11,9 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jboss.resteasy.client.jaxrs.internal.ResteasyClientBuilderImpl;
 import org.keycloak.OAuth2Constants;
-import org.keycloak.admin.client.CreatedResponseUtil;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
+import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -21,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -32,9 +32,9 @@ public class KeyCloakService implements IdentityProvider {
     private final KeycloakProperties props;
 
     @PostConstruct
-    public void keyCloakAdminClient() {
+    public void initKeycloakAdminClient() {
         keycloak = KeycloakBuilder.builder()
-                .serverUrl(props.getEndpoint())
+                .serverUrl(props.getServerUrl())
                 .realm(props.getRealm())
                 .clientId(props.getClientId())
                 .clientSecret(props.getClientSecret())
@@ -47,90 +47,135 @@ public class KeyCloakService implements IdentityProvider {
                                 .build()
                 )
                 .build();
-    }
-
-    private UsersResource usersResource() {
-        return keycloak.realm(props.getRealm()).users();
+        log.info("Keycloak admin client initialized, realm={}, endpoint={}", props.getRealm(), props.getServerUrl());
     }
 
     @PreDestroy
-    public void closeKeyCloak() {
+    public void closeKeycloakAdminClient() {
         keycloak.close();
+        log.info("Keycloak admin client closed");
     }
 
     @Override
-    public String createUser(UserDTO request) {
-        log.debug("Creating user in Keycloak....");
-        UserRepresentation user = toRepresentation(request);
-        Response response = usersResource().create(user);
-        log.debug("Keycloak response header {}", response.getHeaders().toString());
-        int responseStatus = response.getStatus();
-        if (responseStatus == HttpStatus.CONFLICT.value()) {
-            throw new RuntimeException(".....");
-        } else if (responseStatus != HttpStatus.CREATED.value()) {
-            log.error("Keycloak response body {}", response.readEntity(String.class));
-            throw new RuntimeException(".....");
+    public String createUser(UserDTO dto) {
+        log.debug("Creating user without password, username={}", dto.getUsername());
+        return createUserInKeycloak(toRepresentation(dto));
+    }
+
+    @Override
+    public String createUserWithPassword(UserDTO dto, String password, boolean hasTempPassword) {
+        log.debug("Creating user with password, username={}, hasTempPassword={}", dto.getUsername(), hasTempPassword);
+        UserRepresentation user = toRepresentation(dto);
+        user.setEmailVerified(true);
+        user.setCredentials(List.of(buildCredential(password, hasTempPassword)));
+        if (hasTempPassword) {
+            user.setRequiredActions(List.of("UPDATE_PASSWORD"));
         }
-//        String userId = CreatedResponseUtil.getCreatedId(response);
-//        setPassword(userId, request.getPassword());
-        String createdUserLocation = String.valueOf(response.getHeaders().get("Location"));
-        response.close();
-        return createdUserLocation.substring(createdUserLocation.lastIndexOf('/') + 1,
-                createdUserLocation.length() - 1);
-
+        return createUserInKeycloak(user);
     }
 
     @Override
-    public UserResponse getUserById(String userId) {
-        return toResponse(usersResource().get(userId).toRepresentation());
-    }
-
-    @Override
-    public List<UserResponse> getAllUsers() {
-        return usersResource().list().stream().map(this::toResponse).toList();
-    }
-
-    @Override
-    public UserResponse updateUser(String userId, UserDTO request) {
-        usersResource().get(userId).update(toRepresentation(request));
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
-            setPassword(userId, request.getPassword());
+    public Optional<String> findByEmailAndUsername(String email, String username) {
+        log.debug("Searching user, email={}, username={}", email, username);
+        try {
+            List<UserRepresentation> byEmail = usersResource().searchByEmail(email, true);
+            if (!byEmail.isEmpty()) {
+                return Optional.of(byEmail.get(0).getId());
+            }
+            List<UserRepresentation> byUsername = usersResource().searchByUsername(username, true);
+            return byUsername.isEmpty() ? Optional.empty() : Optional.of(byUsername.get(0).getId());
+        } catch (Exception e) {
+            log.warn("Error searching user, email={}, username={}", email, username, e);
+            return Optional.empty();
         }
-        return toResponse(usersResource().get(userId).toRepresentation());
+    }
+
+    @Override
+    public void resetPassword(String userId, String password) {
+        log.debug("Resetting password, userId={}", userId);
+        usersResource().get(userId).resetPassword(buildCredential(password, false));
+        log.info("Password reset, userId={}", userId);
+    }
+
+    @Override
+    public void enableUser(String userId) {
+        UserResource userResource = usersResource().get(userId);
+        UserRepresentation user = userResource.toRepresentation();
+        if (user.isEnabled()) {
+            log.debug("User already enabled, userId={}", userId);
+            return;
+        }
+        user.setEnabled(true);
+        userResource.update(user);
+        log.info("User enabled, userId={}", userId);
+    }
+
+    @Override
+    public void disableUser(String userId) {
+        UserResource userResource = usersResource().get(userId);
+        UserRepresentation user = userResource.toRepresentation();
+        if (!user.isEnabled()) {
+            log.debug("User already disabled, userId={}", userId);
+            return;
+        }
+        user.setEnabled(false);
+        userResource.update(user);
+        userResource.logout();
+        log.info("User disabled and sessions invalidated, userId={}", userId);
     }
 
     @Override
     public void deleteUser(String userId) {
-        usersResource().get(userId).remove();
+        UserResource userResource = usersResource().get(userId);
+        if (userResource.toRepresentation() == null) {
+            log.debug("User not found, skipping delete, userId={}", userId);
+            return;
+        }
+        userResource.remove();
+        log.info("User deleted, userId={}", userId);
     }
 
+    private String createUserInKeycloak(UserRepresentation kcUser) {
+        Response response = usersResource().create(kcUser);
+        int status = response.getStatus();
 
-    private void setPassword(String userId, String password) {
+        if (status == HttpStatus.CONFLICT.value()) {
+            log.warn("User already exists, username={}", kcUser.getUsername());
+            throw new RuntimeException("User already exists: username=" + kcUser.getUsername());
+        }
+        if (status != HttpStatus.CREATED.value()) {
+            String body = response.readEntity(String.class);
+            log.error("Unexpected Keycloak response creating user, status={}, body={}, username={}", status, body, kcUser.getUsername());
+            throw new RuntimeException("Failed to create user in Keycloak, status=" + status);
+        }
+
+        // Location header is returned as a List; toString() wraps it in [...], so trim the trailing ']'
+        String location = String.valueOf(response.getHeaders().get("Location"));
+        response.close();
+        String userId = location.substring(location.lastIndexOf('/') + 1, location.length() - 1);
+        log.info("User created in Keycloak, userId={}, username={}", userId, kcUser.getUsername());
+        return userId;
+    }
+
+    private CredentialRepresentation buildCredential(String password, boolean temporary) {
         CredentialRepresentation credential = new CredentialRepresentation();
-        credential.setTemporary(false);
+        credential.setTemporary(temporary);
         credential.setType(CredentialRepresentation.PASSWORD);
         credential.setValue(password);
-        usersResource().get(userId).resetPassword(credential);
+        return credential;
     }
 
-    private UserRepresentation toRepresentation(UserDTO request) {
+    private UserRepresentation toRepresentation(UserDTO dto) {
         UserRepresentation user = new UserRepresentation();
-        user.setUsername(request.getUsername());
-        user.setEmail(request.getEmail());
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setEnabled(request.isEnabled());
+        user.setUsername(dto.getUsername());
+        user.setEmail(dto.getEmail());
+        user.setFirstName(dto.getFirstName());
+        user.setLastName(dto.getLastName());
+        user.setEnabled(dto.isEnabled());
         return user;
     }
 
-    private UserResponse toResponse(UserRepresentation rep) {
-        return UserResponse.builder()
-                .id(rep.getId())
-                .username(rep.getUsername())
-                .email(rep.getEmail())
-                .firstName(rep.getFirstName())
-                .lastName(rep.getLastName())
-                .enabled(rep.isEnabled())
-                .build();
+    private UsersResource usersResource() {
+        return keycloak.realm(props.getRealm()).users();
     }
 }

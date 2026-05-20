@@ -10,7 +10,6 @@ public class KeycloakProperties {
     private String realm;
     private String clientId;
     private String clientSecret;
-    private String endpoint;
     private int connectionPoolSize;
     private int connectTimeoutSeconds;
     private int readTimeoutSeconds;
