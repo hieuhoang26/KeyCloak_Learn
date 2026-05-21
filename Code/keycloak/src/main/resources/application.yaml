@@ -6,6 +6,23 @@ server:
 spring:
   application:
     name: keycloak
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/keycloak}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:12345678}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  liquibase:
+    change-log: classpath:db/changelog/baseline-master.xml
+    enabled: true
 
 keycloak:
   server-url: ${KEYCLOAK_SERVER_URL:http://localhost:8080}
