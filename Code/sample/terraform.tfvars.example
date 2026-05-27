@@ -1,0 +1,45 @@
+# =============================================================================
+# terraform.tfvars — Local development defaults
+#
+# Copy this to terraform.tfvars and adjust for your environment.
+# NEVER commit secrets to version control.
+# =============================================================================
+
+keycloak_url            = "http://localhost:8080"
+keycloak_admin_user     = "admin"
+keycloak_admin_password = "admin"       # Change in production!
+
+realm_name              = "app-realm"
+realm_display_name      = "My Application"
+
+# ── Backend ──────────────────────────────────────────────────────────────────
+backend_client_id       = "spring-boot-api"
+backend_root_url        = "http://localhost:8081"
+
+# ── Frontend ─────────────────────────────────────────────────────────────────
+frontend_client_id      = "frontend-app"
+frontend_root_url       = "http://localhost:3000"
+frontend_valid_redirects = [
+  "http://localhost:3000/*",
+  "http://localhost:5173/*",   # Vite dev server
+]
+frontend_web_origins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+]
+
+# ── Roles ────────────────────────────────────────────────────────────────────
+realm_roles = {
+  "admin"   = "Full administrative access"
+  "manager" = "Can manage resources and users"
+  "user"    = "Standard user access"
+  "viewer"  = "Read-only access"
+}
+
+# ── Token Lifespans ──────────────────────────────────────────────────────────
+access_token_lifespan    = 300   # 5 minutes
+refresh_token_lifespan   = 1800  # 30 minutes
+sso_session_max_lifespan = 36000 # 10 hours
+
+# ── Demo Users ───────────────────────────────────────────────────────────────
+create_demo_users = true
