@@ -380,7 +380,8 @@ docker run -p 8080:8080 \
 ## 8. Session & Token Lifespan for Production
 
 ### Recommended settings (Realm settings → Tokens)
-
+  server:
+    port: ${SERVER_PORT:8000}
 | Setting                          | Value   | Reason                               |
 | -------------------------------- | ------- | ------------------------------------ |
 | Access token lifespan            | 5 min   | Short window if token is leaked      |

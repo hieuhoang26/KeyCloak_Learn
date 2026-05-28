@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+/infra/keycloak/.terraform.lock.hcl
+/infra/keycloak/.terraform/
+/infra/keycloak/terraform.tfstate
+/infra/keycloak/terraform.tfstate.backup

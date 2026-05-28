@@ -241,6 +241,78 @@ admin              → realm role: "admin" (composite: viewer + write + delete)
 service-account-x  → client role: "internal-api-access"
 ```
 
+### Client Scopes
+
+A client scope is a reusable bundle of claims, roles, and protocol mappers that can be assigned to multiple clients. Instead of configuring each client individually, you define a scope once and attach it where needed.
+
+**Why it matters:** The `scope` parameter in an OAuth 2.0 request controls what claims appear in the token. Keycloak maps requested scopes → client scopes → protocol mappers → token claims.
+
+```
+Client request: scope=openid profile email
+                         │
+                         ▼
+         Keycloak resolves each scope name
+         ┌──────────────────────────────────┐
+         │  openid  → sub claim             │
+         │  profile → name, given_name, ... │
+         │  email   → email, email_verified │
+         └──────────────────────────────────┘
+                         │
+                         ▼
+              Claims included in ID Token
+```
+
+#### Scope types
+
+| Type        | Behavior                                                                 |
+| ----------- | ------------------------------------------------------------------------ |
+| **Default** | Always included in the token, even if the client does not request it     |
+| **Optional** | Included only when the client explicitly requests it via `scope=` param |
+
+#### Built-in scopes (Keycloak defaults)
+
+| Scope name    | Claims added to token                            |
+| ------------- | ------------------------------------------------ |
+| `openid`      | Enables OIDC; adds `sub`                         |
+| `profile`     | `name`, `given_name`, `family_name`, `username`  |
+| `email`       | `email`, `email_verified`                        |
+| `roles`       | `realm_access.roles`, `resource_access.<client>.roles` |
+| `address`     | Postal address fields                            |
+| `phone`       | Phone number fields                              |
+| `offline_access` | Issues a refresh token with offline access    |
+
+#### Protocol Mappers
+
+Each client scope contains **protocol mappers** — the actual rules that write values into tokens.
+
+```
+Client Scope "profile"
+  └── Protocol Mapper: "full name"      → writes name claim
+  └── Protocol Mapper: "given name"     → writes given_name claim
+  └── Protocol Mapper: "family name"    → writes family_name claim
+```
+
+You can add custom mappers to include any user attribute in the token (e.g., `department`, `employee_id`).
+
+#### Example: adding a custom scope
+
+Scenario: include a user's `department` attribute in the access token.
+
+1. Go to **Client Scopes** → **Create client scope**
+2. Name: `department`, type: `Optional`
+3. Go to **Mappers** tab → **Add mapper** → **By configuration** → **User Attribute**
+4. Attribute name: `department`, Token claim name: `department`, Add to access token: **On**
+5. Assign the scope to a client: **Clients** → your client → **Client scopes** → **Add client scope**
+
+Token result:
+```json
+{
+  "sub": "user-uuid",
+  "preferred_username": "testuser",
+  "department": "engineering"
+}
+```
+
 ### Identity Providers (IdPs)
 
 External identity sources Keycloak can federate with:

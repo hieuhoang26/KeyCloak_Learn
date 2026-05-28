@@ -1,4 +1,5 @@
-resource "keycloak_realm" "backend-realm" {
+# Realm
+resource "keycloak_realm" "demo-realm" {
   realm             = "kc-be"
   enabled           = true
   display_name      = "be-realm"
@@ -66,3 +67,62 @@ resource "keycloak_realm" "backend-realm" {
     default_locale    = "en"
   }
 }
+
+# realm role
+
+resource "keycloak_default_roles" "default_roles" {
+  realm_id      = keycloak_realm.demo-realm.id
+  default_roles = ["uma_authorization", "offline_access"]
+}
+
+
+
+locals {
+  composite_role_keys = toset(["admin", "manager"])
+
+  // user/ viewer
+  plain_roles = {
+    for k, v in var.realm_roles : k => v
+    if !contains(local.composite_role_keys, k)
+  }
+}
+
+# create normal realm role
+resource "keycloak_role" "realm_roles" {
+  for_each = local.plain_roles
+  realm_id = keycloak_realm.demo-realm.id
+  name     = each.key
+  description = each.value
+}
+
+resource "keycloak_role" "manager_composite" {
+  realm_id    = keycloak_realm.demo-realm.id
+  name        = "manager"
+  description = var.realm_roles["manager"]
+
+  composite_roles = [
+    keycloak_role.realm_roles["user"].id,
+    keycloak_role.realm_roles["viewer"].id,
+  ]
+
+  depends_on = [keycloak_role.realm_roles]
+}
+
+# Composite: admin inherits manager, manager inherits user
+resource "keycloak_role" "admin_composite" {
+  realm_id = keycloak_realm.demo-realm.id
+  composite_roles = [
+    keycloak_role.manager_composite.id
+    # keycloak_role.realm_roles["user"].id,
+    # keycloak_role.realm_roles["viewer"].id,
+  ]
+  name = "admin"
+  description = var.realm_roles["admin"]
+  depends_on = [keycloak_role.realm_roles, keycloak_role.manager_composite]
+  lifecycle {
+    # Managed separately from the flat role map
+    ignore_changes = []
+  }
+}
+
+

@@ -23,6 +23,11 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/baseline-master.xml
     enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_SERVER_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:demo}
 
 keycloak:
   server-url: ${KEYCLOAK_SERVER_URL:http://localhost:8080}
