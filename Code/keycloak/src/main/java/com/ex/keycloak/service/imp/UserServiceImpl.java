@@ -3,6 +3,7 @@ package com.ex.keycloak.service.imp;
 import com.ex.keycloak.constants.UserStatus;
 import com.ex.keycloak.domain.User;
 import com.ex.keycloak.dto.UserDTO;
+import com.ex.keycloak.repository.RoleRepository;
 import com.ex.keycloak.repository.UserRepository;
 import com.ex.keycloak.service.IdentityProvider;
 import com.ex.keycloak.service.UserService;
@@ -20,6 +21,7 @@ public class UserServiceImpl implements UserService {
 
     private final IdentityProvider identityProvider;
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
 
     @Override
     @Transactional
@@ -86,7 +88,11 @@ public class UserServiceImpl implements UserService {
                 .fullName(dto.getFirstName() + " " + dto.getLastName())
                 .status(UserStatus.ACTIVE)
                 .build();
-        userRepository.save(user);
+        User saved = userRepository.save(user);
+        roleRepository.findByName("ROLE_USER").ifPresent(role -> {
+            saved.getRoles().add(role);
+            userRepository.save(saved);
+        });
         log.info("Local user persisted, keycloakId={}, username={}", keycloakId, dto.getUsername());
     }
 }

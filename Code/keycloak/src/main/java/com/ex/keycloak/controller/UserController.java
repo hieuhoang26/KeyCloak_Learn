@@ -1,13 +1,17 @@
 package com.ex.keycloak.controller;
 
 import com.ex.keycloak.dto.UserDTO;
+import com.ex.keycloak.service.RoleService;
 import com.ex.keycloak.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/users")
@@ -15,6 +19,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final RoleService roleService;
 
     @PostMapping
     public ResponseEntity<Map<String, String>> create(@RequestBody UserDTO request) {
@@ -62,6 +67,28 @@ public class UserController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         userService.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/roles")
+    public ResponseEntity<List<String>> getUserRoles(@PathVariable String id) {
+        return ResponseEntity.ok(roleService.getUserRoles(id));
+    }
+
+    @PostMapping("/{id}/roles/{roleId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<String>> assignRole(
+            @PathVariable String id,
+            @PathVariable UUID roleId) {
+        return ResponseEntity.ok(roleService.assignRoleToUser(id, roleId));
+    }
+
+    @DeleteMapping("/{id}/roles/{roleId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> revokeRole(
+            @PathVariable String id,
+            @PathVariable UUID roleId) {
+        roleService.revokeRoleFromUser(id, roleId);
         return ResponseEntity.noContent().build();
     }
 }

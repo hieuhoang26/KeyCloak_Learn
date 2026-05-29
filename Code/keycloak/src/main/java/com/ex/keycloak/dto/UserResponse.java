@@ -3,6 +3,8 @@ package com.ex.keycloak.dto;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Builder
 public class UserResponse {
@@ -12,4 +14,5 @@ public class UserResponse {
     private String firstName;
     private String lastName;
     private boolean enabled;
+    private List<String> roles;
 }

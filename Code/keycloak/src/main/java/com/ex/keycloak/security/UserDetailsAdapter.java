@@ -1,6 +1,7 @@
 package com.ex.keycloak.security;
 
 import com.ex.keycloak.constants.UserStatus;
+import com.ex.keycloak.domain.Role;
 import com.ex.keycloak.domain.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -23,7 +24,10 @@ public class UserDetailsAdapter implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return user.getRoles().stream()
+                .map(Role::getName)
+                .map(SimpleGrantedAuthority::new)
+                .toList();
     }
 
     @Override
