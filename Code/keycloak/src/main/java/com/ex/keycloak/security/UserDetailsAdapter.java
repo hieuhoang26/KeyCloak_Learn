@@ -3,6 +3,7 @@ package com.ex.keycloak.security;
 import com.ex.keycloak.constants.UserStatus;
 import com.ex.keycloak.domain.Role;
 import com.ex.keycloak.domain.User;
+import com.ex.keycloak.dto.UserInfo;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -12,22 +13,24 @@ import java.util.List;
 
 public class UserDetailsAdapter implements UserDetails {
 
-    private final User user;
+    private final transient UserInfo userInfo;
+    private final Collection<GrantedAuthority> authorities;
 
-    public UserDetailsAdapter(User user) {
-        this.user = user;
+
+
+    public UserDetailsAdapter(UserInfo userInfo){
+
+        this.userInfo = userInfo;
+        this.authorities = List.of(new SimpleGrantedAuthority("ROLE_" + userInfo.getRoles()));
     }
 
-    public User getUser() {
-        return user;
+    public UserInfo getUser() {
+        return userInfo;
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return user.getRoles().stream()
-                .map(Role::getName)
-                .map(SimpleGrantedAuthority::new)
-                .toList();
+        return authorities;
     }
 
     @Override
@@ -37,12 +40,13 @@ public class UserDetailsAdapter implements UserDetails {
 
     @Override
     public String getUsername() {
-        return user.getUsername();
+        return userInfo.getUsername();
     }
+
 
     @Override
     public boolean isEnabled() {
-        return user.getStatus() == UserStatus.ACTIVE;
+        return userInfo.getStatus() == UserStatus.ACTIVE;
     }
 
     @Override
